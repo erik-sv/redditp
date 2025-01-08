@@ -14,7 +14,7 @@ rp.settings = {
     // Speed of the animation
     animationSpeed: 100,
     shouldAutoNextSlide: true,
-    timeToNextSlide: 6 * 1000,
+    timeToNextSlide: 15 * 1000,
     cookieDays: 300,
     nsfw: true,
     sound: false
@@ -43,18 +43,55 @@ rp.session = {
 // which also includes some text and url's.
 rp.photos = [];
 
+// Store blocked users
+rp.blockedUsers = new Set();
+
+rp.loadBlockedUsers = async function() {
+    try {
+        const response = await fetch('/api/blocked-users');
+        const data = await response.json();
+        rp.blockedUsers = new Set(data.blockedUsers);
+        if (rp.photos) {
+            rp.photos = rp.photos.filter(photo => !rp.blockedUsers.has(photo.author));
+            $('#navboxContent').empty();
+            for (var i = 0; i <rp.photos.length; i++) {
+                addNumberButton(i);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading blocked users:', error);
+        toastr.error('Failed to load blocked users list');
+    }
+};
+
+rp.hideCurrentUser = async function() {
+    const currentPhoto = rp.photos[rp.session.activeIndex];
+    if (currentPhoto && currentPhoto.author) {
+        try {
+            await fetch('/api/blocked-users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentPhoto.author })
+            });
+            rp.blockedUsers.add(currentPhoto.author);
+            rp.photos = rp.photos.filter(photo => !rp.blockedUsers.has(photo.author));
+            if (rp.blockedUsers.has(currentPhoto.author)) {
+                nextSlide();
+            }
+            $('#navboxContent').empty();
+            for (var i = 0; i < rp.photos.length; i++) {
+                addNumberButton(i);
+            }
+            toastr.success(`Blocked all posts from user: ${currentPhoto.author}`);
+        } catch (error) {
+            console.error('Error blocking user:', error);
+            toastr.error('Failed to block user');
+        }
+    }
+};
+
 // maybe checkout http://engineeredweb.com/blog/09/12/preloading-images-jquery-and-javascript/ for implementing the old precache
 rp.cache = {};
-
-function reportError(errMessage) {
-    if (window.errorHandler && window.errorHandler.report) {
-        window.errorHandler.report(new Error(errMessage));
-    } else {
-        console.log('No error handler yet: ' + errMessage);
-    }
-    toastr.error(errMessage + ', please alert ubershmekel on <a href="https://github.com/ubershmekel/redditp/issues">github</a>');
-}
-
 
 $(function () {
 
@@ -335,6 +372,9 @@ $(function () {
 
         $('#prevButton').click(prevSlide);
         $('#nextButton').click(nextSlide);
+        $("#hideUserButton").click(function() {
+            rp.hideCurrentUser();
+        });
     };
 
     var addNumberButton = function (numberButton) {
@@ -1191,6 +1231,7 @@ $(function () {
     var getVarsQuestionMark;
 
     initState();
+    rp.loadBlockedUsers();
     setupUrls();
 
     // if ever found even 1 image, don't show the error
