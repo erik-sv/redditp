@@ -144,3 +144,21 @@ label.checkbox { font-weight: bold; }
     cursor: pointer;
 	z-index: 2
 }
+
+.button {
+    background-color: #4CAF50;
+    border: none;
+    color: white;
+    padding: 5px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    margin: 2px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.button:hover {
+    background-color: #45a049;
+}

@@ -113,26 +113,7 @@
                         rel="noopener noreferrer">user</a>
                 </li>
                 <li>
-                    <a href="https://github.com/ubershmekel/redditp/blob/master/README.md" title="hotkeys"
-                        target="_blank" rel="noopener noreferrer">readme</a>
-                </li>
-                <li>
-                    <!-- promoting myself, is this wrong? -->
-                    <!-- <a href="https://twitter.com/ubershmekel" title="follow me" target="_blank"
-                   rel="noopener noreferrer">u</a> -->
-                    <!-- /r/redditp subreddit -->
-                    <!-- <a href="https://www.reddit.com/r/redditp/" title="/r/redditp" target="_blank"
-                   rel="noopener noreferrer">r</a> -->
-                    <!-- internet leaderboard -->
-                    <!--a href="https://www.internetleaderboard.com" title="internet leaderboard" target="_blank"
-                   rel="noopener noreferrer">il</a> -->
-                    <!-- <a href="http://www.tagsyo.com" title="A new project I'm working on" class="tagsyo">t</a> -->
-                    <!-- <a
-                    href="https://www.producthunt.com/posts/default-scrollbar"
-                    title="A recent project by the redditp maker: the default scrollbar chrome extension"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >p</a> -->
+                    <a href="javascript:void(0)" id="hideUserButton" class="clouds button">Hide User's Posts</a>
                 </li>
             </ul>
             <ul class="nbmenu">
@@ -140,14 +121,14 @@
                     <input class="checkbox" type="checkbox" name="autoNextSlide" id="autoNextSlide" value="Auto"
                         checked />
                     <label class="checkbox" for="autoNextSlide"> Auto-next</label>
-                    every <input type="text" name="timeToNextSlide" id="timeToNextSlide" inputmode="numeric" value="5"
+                    every <input type="text" name="timeToNextSlide" id="timeToNextSlide" inputmode="numeric" value="15"
                         size="2" /> seconds
                 </li>
                 <li>
                     <input class="checkbox" type="checkbox" name="nsfw" id="nsfw" value="Auto" checked />
                     <label class="checkbox over18" for="nsfw"> nsfw</label>
 
-                    <input class="checkbox" type="checkbox" name="sound" id="sound" value="false" />
+                    <input class="checkbox" type="checkbox" name="sound" id="sound" value="true" />
                     <label class="checkbox" for="sound"> sound</label>
 
                     <img src="/images/fullscreen.png" id="fullScreenButton" alt="Fullscreen" />
@@ -160,7 +141,6 @@
                 <ul id="sfwNumberButtons">
                 </ul>
             </div>
-            <a href="javascript:void(0)" id="hideUserButton" class="clouds">Hide User's Posts</a>
             <span class="clouds separator">|</span>
         </div>
     </div>

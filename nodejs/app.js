@@ -2,13 +2,30 @@ const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3600;
+
+// Debug logging middleware
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
 
 // Middleware to parse JSON bodies
 app.use(express.json());
 
-// Serve static files
-app.use(express.static(path.join(__dirname, '..')));
+// CORS middleware for local development
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    }
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 // Path to blocked users file
 const BLOCKED_USERS_FILE = path.join(__dirname, 'data', 'blocked_users.json');
@@ -17,15 +34,29 @@ const BLOCKED_USERS_FILE = path.join(__dirname, 'data', 'blocked_users.json');
 async function initBlockedUsersFile() {
     try {
         await fs.access(BLOCKED_USERS_FILE);
+        console.log('Blocked users file exists at:', BLOCKED_USERS_FILE);
     } catch {
+        console.log('Creating blocked users file at:', BLOCKED_USERS_FILE);
+        const dir = path.dirname(BLOCKED_USERS_FILE);
+        try {
+            await fs.mkdir(dir, { recursive: true });
+            console.log('Created data directory at:', dir);
+        } catch (err) {
+            if (err.code !== 'EEXIST') throw err;
+        }
         await fs.writeFile(BLOCKED_USERS_FILE, JSON.stringify({ blockedUsers: [] }));
+        console.log('Initialized empty blocked users file');
     }
 }
 
-// Get blocked users
-app.get('/api/blocked-users', async (req, res) => {
+// API Routes - Define these BEFORE static file handling
+const apiRouter = express.Router();
+
+apiRouter.get('/blocked-users', async (req, res) => {
+    console.log('GET /api/blocked-users called');
     try {
         const data = await fs.readFile(BLOCKED_USERS_FILE, 'utf8');
+        console.log('Sending blocked users:', data);
         res.json(JSON.parse(data));
     } catch (error) {
         console.error('Error reading blocked users:', error);
@@ -33,8 +64,8 @@ app.get('/api/blocked-users', async (req, res) => {
     }
 });
 
-// Add blocked user
-app.post('/api/blocked-users', async (req, res) => {
+apiRouter.post('/blocked-users', async (req, res) => {
+    console.log('POST /api/blocked-users called with body:', req.body);
     try {
         const { username } = req.body;
         if (!username) {
@@ -47,6 +78,7 @@ app.post('/api/blocked-users', async (req, res) => {
         if (!blockedUsers.blockedUsers.includes(username)) {
             blockedUsers.blockedUsers.push(username);
             await fs.writeFile(BLOCKED_USERS_FILE, JSON.stringify(blockedUsers, null, 2));
+            console.log('Added blocked user:', username);
         }
         
         res.json(blockedUsers);
@@ -56,8 +88,8 @@ app.post('/api/blocked-users', async (req, res) => {
     }
 });
 
-// Remove blocked user
-app.delete('/api/blocked-users/:username', async (req, res) => {
+apiRouter.delete('/blocked-users/:username', async (req, res) => {
+    console.log('DELETE /api/blocked-users/:username called with username:', req.params.username);
     try {
         const { username } = req.params;
         const data = await fs.readFile(BLOCKED_USERS_FILE, 'utf8');
@@ -65,6 +97,7 @@ app.delete('/api/blocked-users/:username', async (req, res) => {
         
         blockedUsers.blockedUsers = blockedUsers.blockedUsers.filter(user => user !== username);
         await fs.writeFile(BLOCKED_USERS_FILE, JSON.stringify(blockedUsers, null, 2));
+        console.log('Removed blocked user:', username);
         
         res.json(blockedUsers);
     } catch (error) {
@@ -73,15 +106,27 @@ app.delete('/api/blocked-users/:username', async (req, res) => {
     }
 });
 
-// Always respond with the html, except for the above exceptions.
-// Because it's a single page app.
-app.get('/*', function(req, res) {
-    res.sendFile(__dirname + '/index.html');
+// Mount API routes
+app.use('/api', apiRouter);
+
+// Serve static files AFTER API routes
+app.use(express.static(path.join(__dirname, '..')));
+
+// Catch-all route for SPA - this should be LAST
+app.get('*', function(req, res) {
+    console.log('Catch-all route hit for:', req.url);
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 // Initialize blocked users file and start server
 initBlockedUsersFile().then(() => {
     app.listen(port, () => {
         console.log(`Server running at http://localhost:${port}`);
+        console.log('API endpoints:');
+        console.log(`  GET    http://localhost:${port}/api/blocked-users`);
+        console.log(`  POST   http://localhost:${port}/api/blocked-users`);
+        console.log(`  DELETE http://localhost:${port}/api/blocked-users/:username`);
     });
-}).catch(console.error);
+}).catch(error => {
+    console.error('Failed to initialize server:', error);
+});
