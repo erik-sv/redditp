@@ -162,3 +162,12 @@ label.checkbox { font-weight: bold; }
 .button:hover {
     background-color: #45a049;
 }
+
+#authPanel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 10px;
+    background: rgba(0,0,0,0.8);
+    z-index: 5;
+}

@@ -6,6 +6,8 @@ var http = require('http');
 var path = require('path');
 var express = require('express');
 var fs = require('fs').promises;
+var bcrypt = require('bcryptjs');
+var sqlite3 = require('sqlite3').verbose();
 var app = express();
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -39,6 +41,24 @@ app.use((req, res, next) => {
 });
 
 const axios = require('axios');
+
+const DB_FILE = path.join(__dirname, 'data', 'redditp.db');
+let db;
+
+async function initDatabase() {
+    await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
+    return new Promise((resolve, reject) => {
+        db = new sqlite3.Database(DB_FILE, err => {
+            if (err) return reject(err);
+            db.serialize(() => {
+                db.run('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)');
+                db.run('CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, group_name TEXT, users TEXT)');
+                db.run('CREATE TABLE IF NOT EXISTS preferences (username TEXT PRIMARY KEY, prefs TEXT)');
+                resolve();
+            });
+        });
+    });
+}
 
 // Path to blocked users file
 const BLOCKED_USERS_FILE = path.join(__dirname, 'data', 'blocked_users.json');
@@ -112,6 +132,88 @@ app.delete('/api/blocked-users/:username', async (req, res) => {
     }
 });
 
+// User registration
+app.post('/api/register', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: 'username and password required' });
+    }
+    db.get('SELECT username FROM users WHERE username = ?', [username], (err, row) => {
+        if (err) return res.status(500).json({ error: 'db error' });
+        if (row) return res.status(400).json({ error: 'user exists' });
+
+        const hash = bcrypt.hashSync(password, 10);
+        db.run('INSERT INTO users(username, password) VALUES (?, ?)', [username, hash], err2 => {
+            if (err2) return res.status(500).json({ error: 'db error' });
+            res.json({ success: true });
+        });
+    });
+});
+
+// Simple login endpoint (no sessions)
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: 'username and password required' });
+    }
+    db.get('SELECT password FROM users WHERE username = ?', [username], (err, row) => {
+        if (err) return res.status(500).json({ error: 'db error' });
+        if (!row) return res.status(400).json({ error: 'invalid credentials' });
+        if (!bcrypt.compareSync(password, row.password)) {
+            return res.status(400).json({ error: 'invalid credentials' });
+        }
+        res.json({ success: true });
+    });
+});
+
+// CRUD for groups
+app.get('/api/groups/:username', (req, res) => {
+    const { username } = req.params;
+    db.all('SELECT id, group_name, users FROM groups WHERE username = ?', [username], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'db error' });
+        res.json({ groups: rows.map(r => ({ id: r.id, name: r.group_name, users: JSON.parse(r.users) })) });
+    });
+});
+
+app.post('/api/groups', (req, res) => {
+    const { username, groupName, users } = req.body;
+    if (!username || !groupName || !Array.isArray(users)) {
+        return res.status(400).json({ error: 'invalid payload' });
+    }
+    const userStr = JSON.stringify(users);
+    db.run('INSERT INTO groups(username, group_name, users) VALUES (?, ?, ?)', [username, groupName, userStr], function(err) {
+        if (err) return res.status(500).json({ error: 'db error' });
+        res.json({ id: this.lastID });
+    });
+});
+
+app.delete('/api/groups/:id', (req, res) => {
+    db.run('DELETE FROM groups WHERE id = ?', [req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: 'db error' });
+        res.json({ success: this.changes > 0 });
+    });
+});
+
+// Preferences endpoints
+app.get('/api/preferences/:username', (req, res) => {
+    db.get('SELECT prefs FROM preferences WHERE username = ?', [req.params.username], (err, row) => {
+        if (err) return res.status(500).json({ error: 'db error' });
+        res.json({ prefs: row ? JSON.parse(row.prefs) : {} });
+    });
+});
+
+app.post('/api/preferences', (req, res) => {
+    const { username, prefs } = req.body;
+    if (!username || typeof prefs !== 'object') {
+        return res.status(400).json({ error: 'invalid payload' });
+    }
+    const prefStr = JSON.stringify(prefs);
+    db.run('INSERT INTO preferences(username, prefs) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET prefs=excluded.prefs', [username, prefStr], function(err) {
+        if (err) return res.status(500).json({ error: 'db error' });
+        res.json({ success: true });
+    });
+});
+
 // Proxy endpoint for Reddit JSON requests
 app.get('/api/reddit/*', async (req, res) => {
   try {
@@ -162,8 +264,8 @@ app.get('/*', function (req, res) {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Initialize blocked users file and start server
-initBlockedUsersFile().then(() => {
+// Initialize database and blocked users file then start server
+Promise.all([initDatabase(), initBlockedUsersFile()]).then(() => {
     server.listen(app.get('port'), function () {
         console.log(`Server running in ${isProd ? 'production' : 'development'} mode on port ${app.get('port')}`);
     });

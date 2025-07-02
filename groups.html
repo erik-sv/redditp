@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>RedditP - Favorites</title>
+    <title>RedditP - Groups</title>
     <link rel="stylesheet" type="text/css" href="css/style.css" />
     <link rel="stylesheet" type="text/css" href="css/toastr.min.css" />
     <script type="text/javascript" src="js/jquery.min.js"></script>
@@ -20,15 +20,19 @@
         <button id="registerButton">Register</button>
         <span id="authStatus"></span>
     </div>
+    <div id="groupManager" class="panel">
+        <h2>Create Group</h2>
+        <input type="text" id="newGroupName" placeholder="Group name" />
+        <input type="text" id="newGroupUsers" placeholder="comma,separated,usernames" />
+        <button id="saveGroupButton">Save Group</button>
+        <ul id="groupsList"></ul>
+    </div>
     <div id="page">
         <div id="controlsDiv" class="panel">
             <div class="collapser" data-openstate="open">-</div>
             <ul class="nbmenu">
                 <li><a href="/" class="clouds button">Home</a></li>
-                <li><a href="javascript:void(0)" id="autoNextSlide" class="clouds button">Auto-Next</a></li>
-                <li><a href="javascript:void(0)" id="fullScreenButton" class="clouds button">Full Screen</a></li>
-                <li><a href="javascript:void(0)" id="hideUserButton" class="clouds button">Hide User</a></li>
-                <li><a href="javascript:void(0)" id="favoriteUserButton" class="clouds button">Favorite User</a></li>
+                <li><a href="/favorites.html" class="clouds button">Favorites</a></li>
                 <li><a href="/groups.html" class="clouds button">Groups</a></li>
             </ul>
             <ul class="nbmenu">
@@ -48,10 +52,8 @@
         </div>
         <div id="titleDiv" class="panel">
             <div class="collapser" data-openstate="open">-</div>
-            <h2 id="navboxTitle">Your Favorite Users</h2>
-            <div id="navboxContent">
-                <ul id="favoritesList"></ul>
-            </div>
+            <h2 id="navboxTitle">Group Slideshow</h2>
+            <div id="navboxContent"></div>
             <div id="navboxSubreddit"></div>
             <div id="navboxGallery"></div>
             <div id="navboxUser"></div>
