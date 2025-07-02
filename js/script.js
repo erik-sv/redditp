@@ -35,8 +35,73 @@ rp.settings = {
 
     nsfw: true,
 
-    sound: false
+    sound: true
 
+};
+
+rp.apiBase = '';
+rp.currentUser = localStorage.getItem('currentUser') || '';
+
+rp.persistPreferences = function() {
+    if (!rp.currentUser) return;
+    var prefs = {
+        nsfw: rp.settings.nsfw,
+        sound: rp.settings.sound,
+        autoNext: rp.settings.shouldAutoNextSlide,
+        timeToNext: rp.settings.timeToNextSlide
+    };
+    $.post(rp.apiBase + '/api/preferences', { username: rp.currentUser, prefs: prefs });
+};
+
+rp.loadPreferences = function() {
+    if (!rp.currentUser) return;
+    $.get(rp.apiBase + '/api/preferences/' + encodeURIComponent(rp.currentUser)).done(function(data){
+        var p = data.prefs || {};
+        if (typeof p.nsfw !== 'undefined') { rp.settings.nsfw = p.nsfw; $("#nsfw").prop('checked', p.nsfw); }
+        if (typeof p.sound !== 'undefined') { rp.settings.sound = p.sound; $("#sound").prop('checked', p.sound); }
+        if (typeof p.autoNext !== 'undefined') { rp.settings.shouldAutoNextSlide = p.autoNext; $("#autoNextSlide").prop('checked', p.autoNext); }
+        if (typeof p.timeToNext !== 'undefined') { rp.settings.timeToNextSlide = p.timeToNext; $("#timeToNextSlide").val(p.timeToNext/1000); }
+    });
+};
+
+rp.login = function(username, password, cb) {
+    $.post(rp.apiBase + '/api/login', { username: username, password: password })
+        .done(function(){
+            rp.currentUser = username;
+            localStorage.setItem('currentUser', username);
+            rp.loadGroups();
+            rp.loadPreferences();
+            if (cb) cb(true);
+        })
+        .fail(function(){ if (cb) cb(false); });
+};
+
+rp.register = function(username, password, cb) {
+    $.post(rp.apiBase + '/api/register', { username: username, password: password })
+        .done(function(){ if (cb) cb(true); })
+        .fail(function(){ if (cb) cb(false); });
+};
+
+rp.setupAuthPanel = function() {
+    $('#showLogin').off('click').on('click', function(e){
+        e.preventDefault();
+        $('#authPanel').toggle();
+    });
+    $('#loginButton').off('click').on('click', function(){
+        var u = $('#authUser').val().trim();
+        var p = $('#authPass').val();
+        rp.login(u, p, function(success){
+            $('#authStatus').text(success ? 'Logged in' : 'Login failed');
+            if (success) $('#authPanel').hide();
+        });
+    });
+    $('#registerButton').off('click').on('click', function(){
+        var u = $('#authUser').val().trim();
+        var p = $('#authPass').val();
+        rp.register(u, p, function(success){
+            $('#authStatus').text(success ? 'Registered' : 'Register failed');
+        });
+    });
 };
 
 
@@ -662,13 +727,9 @@ $(function () {
         } else {
 
             console.log(audioTags);
-
         }
-
+        rp.persistPreferences();
     };
-
-
-
     rp.resetNextSlideTimer = function () {
 
         clearTimeout(rp.session.nextSlideTimeoutId);
@@ -684,6 +745,7 @@ $(function () {
         rp.settings.shouldAutoNextSlide = $("#autoNextSlide").is(':checked');
 
         rp.setCookie(cookieNames.shouldAutoNextSlideCookie, rp.settings.shouldAutoNextSlide);
+        rp.persistPreferences();
 
         rp.resetNextSlideTimer();
 
@@ -764,6 +826,7 @@ $(function () {
         rp.settings.nsfw = $("#nsfw").is(':checked');
 
         rp.setCookie(cookieNames.nsfwCookie, rp.settings.nsfw);
+        rp.persistPreferences();
 
     };
 
@@ -857,7 +920,7 @@ $(function () {
 
         if (soundByCookie === undefined) {
 
-            rp.settings.sound = false;
+            rp.settings.sound = true;
 
         } else {
 
@@ -896,6 +959,7 @@ $(function () {
             rp.settings.timeToNextSlide = parseFloat(val) * 1000;
 
             rp.setCookie(cookieNames.timeToNextSlideCookie, val);
+            rp.persistPreferences();
 
         };
 
@@ -1854,10 +1918,18 @@ $(function () {
         }
 
         var url = photo.data.secure_media.reddit_video.dash_url;
+        if (url.indexOf('f=sd') >= 0) {
+            url = url.replace('f=sd', 'f=hd');
+        }
 
         var player = dashjs.MediaPlayer().create();
-
         player.initialize(document.querySelector("video"), url, true);
+        player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, function() {
+            var bitrates = player.getBitrateInfoListFor('video');
+            if (bitrates && bitrates.length > 0) {
+                player.setQualityFor('video', bitrates.length - 1);
+            }
+        });
 
     }
 
@@ -2683,6 +2755,48 @@ $(function () {
 
 
     rp.favoriteUsers = JSON.parse(localStorage.getItem('favoriteUsers') || '[]');
+    rp.userGroups = {};
+
+    rp.loadGroups = function() {
+        if (!rp.currentUser) return;
+        $.get(rp.apiBase + '/api/groups/' + encodeURIComponent(rp.currentUser)).done(function(data){
+            rp.userGroups = {};
+            data.groups.forEach(function(g){
+                rp.userGroups[g.name] = { id: g.id, users: g.users };
+            });
+            rp.updateGroupList();
+        });
+    };
+
+    rp.saveGroupToServer = function(name, users) {
+        if (!rp.currentUser) return;
+        $.post(rp.apiBase + '/api/groups', { username: rp.currentUser, groupName: name, users: users })
+            .done(rp.loadGroups);
+    };
+
+    rp.removeGroupFromServer = function(name) {
+        if (!rp.currentUser || !rp.userGroups[name]) return;
+        $.ajax({
+            url: rp.apiBase + '/api/groups/' + rp.userGroups[name].id,
+            type: 'DELETE'
+        }).done(rp.loadGroups);
+    };
+
+    rp.getUserGroup = function(name) {
+        return (rp.userGroups[name] && rp.userGroups[name].users) || [];
+    };
+
+    rp.updateGroupList = function() {
+        var list = $('#groupsList');
+        if (!list.length) return;
+        list.empty();
+        Object.keys(rp.userGroups).forEach(function(name) {
+            var li = $('<li />');
+            var link = $('<a />').attr('href', '/groups.html?group=' + encodeURIComponent(name)).text(name);
+            li.append(link);
+            list.append(li);
+        });
+    };
 
 
 
@@ -2899,34 +3013,106 @@ $(function () {
 
     };
 
+    rp.loadGroup = function(groupName) {
+        if (window.location.pathname === '/groups.html' && groupName) {
+            var users = rp.getUserGroup(groupName);
+            var allPosts = [];
+            var loadedUsers = 0;
+
+            if (users.length === 0) {
+                $('#navboxSubreddit').text('No users in this group');
+                return;
+            }
+
+            rp.session = {
+                activeIndex: -1,
+                foundOneImage: false,
+                isPlaying: false
+            };
+            rp.photos = [];
+
+            users.forEach(function(username) {
+                $.ajax({
+                    url: 'https://www.reddit.com/user/' + username + '/submitted.json?limit=100',
+                    dataType: 'json',
+                    success: function(data) {
+                        if (data && data.data && data.data.children) {
+                            data.data.children.forEach(function(post) {
+                                if (post.data && post.data.author === username) {
+                                    allPosts.push(post);
+                                }
+                            });
+                        }
+                        loadedUsers++;
+
+                        if (loadedUsers === users.length) {
+                            allPosts.sort((a, b) => b.data.created_utc - a.data.created_utc);
+                            rp.session.foundOneImage = false;
+                            rp.session.activeIndex = -1;
+                            rp.photos = [];
+                            allPosts.forEach(function(item) {
+                                rp.addImageSlide(item);
+                            });
+                            if (!rp.session.foundOneImage) {
+                                $('#navboxSubreddit').text('No images found in group');
+                            } else {
+                                $('#navboxSubreddit').text('Showing posts for group ' + groupName);
+                                rp.startAnimation(0);
+                            }
+                        }
+                    },
+                    error: function() {
+                        loadedUsers++;
+                        toastr.error('Failed to load posts for ' + username);
+                        if (loadedUsers === users.length && !rp.session.foundOneImage) {
+                            $('#navboxSubreddit').text('No images found in group');
+                        }
+                    }
+                });
+            });
+        }
+    };
+
 
 
 
     // Add favorites page link to index.html if not on favorites page
-
     if (window.location.pathname !== '/favorites.html') {
-
         $(function() {
-
             var favoritesLink = $('<li><a href="/favorites.html" class="clouds button">Favorites</a></li>');
-
-
-
             $('.nbmenu:first').append(favoritesLink);
-
         });
-
     }
 
+    // Add groups page link to index.html if not on groups page
+    if (window.location.pathname !== '/groups.html') {
+        $(function() {
+            var groupsLink = $('<li><a href="/groups.html" class="clouds button">Groups</a></li>');
+            $('.nbmenu:first').append(groupsLink);
+        });
+    }
 
-
-
-    // Load favorites if on favorites page
-
+    // Add login button
     $(function() {
+        var loginLink = $('<li><a href="javascript:void(0)" id="showLogin" class="clouds button">Login</a></li>');
+        $('.nbmenu:first').append(loginLink);
+    });
 
+
+
+
+    // Load favorites and user data
+    $(function() {
         rp.loadFavorites();
-
+        if (rp.currentUser) {
+            rp.loadGroups();
+            rp.loadPreferences();
+        }
+        rp.setupAuthPanel();
+        var params = new URLSearchParams(window.location.search);
+        if (window.location.pathname === '/groups.html' && params.has('group')) {
+            rp.loadGroup(params.get('group'));
+        }
     });
 
 
@@ -2937,6 +3123,23 @@ $(function () {
     rp.loadBlockedUsers();
 
     rp.setupUrls();
+
+    $(function() {
+        if (window.location.pathname === '/groups.html') {
+            var params = new URLSearchParams(window.location.search);
+            if (!params.has('group')) {
+                $('#saveGroupButton').click(function() {
+                    var name = $('#newGroupName').val().trim();
+                    var users = $('#newGroupUsers').val().split(',').map(function(u){return u.trim();}).filter(Boolean);
+                    if (name && users.length > 0) {
+                        rp.saveGroupToServer(name, users);
+                        $('#newGroupName').val('');
+                        $('#newGroupUsers').val('');
+                    }
+                });
+            }
+        }
+    });
 
 
 

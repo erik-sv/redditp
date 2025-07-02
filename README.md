@@ -42,6 +42,16 @@ Redditp relies on the `/r/subreddit` in the URL to fetch the JSON from the corre
 * Use a simple HTTP server and put the subreddit URL in the get parameters like `http://localhost?/r/subreddit`.
 * Use GitHub pages by copying `index.html` into `404.html` which will make all unknown URLs reach the same `index.html`. This currently only works with a custom domain because of where the `.js` and `.css` files are located.
 
+### Docker
+
+You can also run redditp using Docker. Build the image and start the service with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+The server listens on port `3600` and stores its SQLite database in `./data`.
+
 ## Credits
 
 * Ubershmekel http://yuvalg.com/

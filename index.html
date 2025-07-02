@@ -91,6 +91,13 @@
 </head>
 
 <body id="page">
+    <div id="authPanel" class="panel" style="display:none;">
+        <input type="text" id="authUser" placeholder="Username" />
+        <input type="password" id="authPass" placeholder="Password" />
+        <button id="loginButton">Login</button>
+        <button id="registerButton">Register</button>
+        <span id="authStatus"></span>
+    </div>
     <div class="prevArrow fadeOnIdle" title="The arrow keys work too" id="prevButton"></div>
     <div class="nextArrow fadeOnIdle" title="Try the arrow keys too" id="nextButton"></div>
 
@@ -131,7 +138,7 @@
                     <input class="checkbox" type="checkbox" name="nsfw" id="nsfw" value="Auto" checked />
                     <label class="checkbox over18" for="nsfw"> nsfw</label>
 
-                    <input class="checkbox" type="checkbox" name="sound" id="sound" value="true" />
+                    <input class="checkbox" type="checkbox" name="sound" id="sound" value="true" checked />
                     <label class="checkbox" for="sound"> sound</label>
 
                     <img src="/images/fullscreen.png" id="fullScreenButton" alt="Fullscreen" />
